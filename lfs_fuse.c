@@ -32,6 +32,18 @@ static bool format = false;
 static bool migrate = false;
 static lfs_t lfs;
 
+typedef struct {
+	struct lfs_config *config;
+	uint8_t cnt;
+} lfs_configs_t;
+
+typedef struct {
+	lfs_t *lfs;
+	uint8_t cnt;
+} lfss_t;
+
+lfs_configs_t configs;
+lfss_t lfss;
 
 // actual fuse functions
 void lfs_fuse_defaults(struct lfs_config *config) {
@@ -486,6 +498,36 @@ int main(int argc, char *argv[]) {
     if (!device) {
         fprintf(stderr, "missing device parameter\n");
         exit(1);
+    }
+    
+    PART_t *part = lfs_fuse_partition_read(device);
+    if(part && part->partition_cnt == 0)
+    {
+    	fprintf(stderr, "have mbr data, but not found partition.");
+        exit(1);
+    }
+    else
+    {
+        if(part)
+        {
+    	    configs->cnt = part->partition_cnt;
+    	    lfss->cnt = part->partition_cnt;
+    	    
+    	    configs->config = malloc(sizeof(struct lfs_config) * configs->cnt);
+    	    memset(configs->config, 0, sizeof(struct lfs_config) * configs->cnt);
+    	    lfss->lfs = malloc(sizeof(lfs_t) * lfss->cnt);
+    	    memset(lfss->lfs, 0, sizeof(lfs_t) * lfss->cnt);
+    	}
+        else
+        {
+    	    configs->cnt = 1;
+    	    lfss->cnt = 1;
+    	    
+    	    configs->config = malloc(sizeof(struct lfs_config));
+    	    memset(configs->config, 0, sizeof(struct lfs_config));
+    	    lfss->lfs = malloc(sizeof(lfs_t));
+    	    memset(lfss->lfs, 0, sizeof(lfs_t));
+        }
     }
 
     if (format) {
