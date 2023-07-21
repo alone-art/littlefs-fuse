@@ -80,6 +80,38 @@ umount mount0
 sudo losetup -d /dev/loop0
 ```
 
+### create partition on block device
+``` bash
+cd user
+make
+./main
+```
+
+modify partition, need edit mbrblock.c and rebuild:
+``` bash
+const MBR_PART_ATTR mbr_attr[] = {
+    {   
+        .part = 1, 
+        .offset = 0x200, 
+        .size = 0x80000,
+        .type = PART_TYPE_LINUX,
+    },
+    {
+        .part = 2, 
+        .offset = 0x80200, 
+        .size = 0x10000,
+        .type = PART_TYPE_LINUX,
+    },
+    {
+        .part = 3, 
+        .offset = 0x90200, 
+        .size = 0x6fe00,
+        .type = PART_TYPE_LINUX,
+    },
+};
+
+```
+
 ## Usage on FreeBSD
 
 littlefs-fuse requires FUSE version 2.6 or higher, you can find your FUSE
