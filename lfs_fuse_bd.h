@@ -35,5 +35,8 @@ int lfs_fuse_bd_erase(const struct lfs_config *cfg, lfs_block_t block);
 // Sync the block device
 int lfs_fuse_bd_sync(const struct lfs_config *cfg);
 
+// if block device have partition, then config partition offset address.
+void lfs_fuse_bd_config_offset(uint32_t offset);
+
 
 #endif

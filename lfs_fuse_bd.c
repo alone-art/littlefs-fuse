@@ -20,6 +20,12 @@
 #include <sys/disk.h>
 #endif
 
+int partition_offset;
+
+void lfs_fuse_bd_config_offset(uint32_t offset)
+{
+    partition_offset = offset;
+}
 
 // Block device wrapper for user-space block devices
 int lfs_fuse_bd_create(struct lfs_config *cfg, const char *path) {
@@ -71,7 +77,7 @@ int lfs_fuse_bd_read(const struct lfs_config *cfg, lfs_block_t block,
     assert(block < cfg->block_count);
 
     // go to block
-    off_t err = lseek(fd, (off_t)block*cfg->block_size + (off_t)off, SEEK_SET);
+    off_t err = lseek(fd, (off_t)block*cfg->block_size + (off_t)off + partition_offset, SEEK_SET);
     if (err < 0) {
         return -errno;
     }
@@ -93,7 +99,7 @@ int lfs_fuse_bd_prog(const struct lfs_config *cfg, lfs_block_t block,
     assert(block < cfg->block_count);
 
     // go to block
-    off_t err = lseek(fd, (off_t)block*cfg->block_size + (off_t)off, SEEK_SET);
+    off_t err = lseek(fd, (off_t)block*cfg->block_size + (off_t)off + partition_offset, SEEK_SET);
     if (err < 0) {
         return -errno;
     }

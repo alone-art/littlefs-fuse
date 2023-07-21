@@ -1,6 +1,7 @@
 #ifndef __MBRBLOCK_H_
 #define __MBRBLOCK_H_
 
+#include <stdint.h>
 
 #pragma pack(1)
 // On disk structures, all entries are little endian
@@ -19,6 +20,12 @@ struct mbr_table {
 };
 #pragma pack()
 
+typedef struct {
+    uint8_t part;
+    uint32_t offset;
+    uint32_t size;
+    uint32_t type;
+} MBR_PART_ATTR;
 
 typedef enum {
     BD_ERROR_OK,
@@ -27,6 +34,7 @@ typedef enum {
 } MBR_ERR;
 
 void partition_init(void);
+int partition_check(void *mbr, uint8_t part, MBR_PART_ATTR *attr);
 
 
 #endif //__MBRBLOCK_H_

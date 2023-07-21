@@ -4,11 +4,12 @@
 #include "mbrblock.h"
 
 typedef struct {
-	struct mbr_table table;
-	int partition_cnt;
+	//struct mbr_table table;
+	MBR_PART_ATTR attr[16];
+	int cnt;
 } PART_t;
 
-struct mbr_table *lfs_fuse_partition_read(const char *path);
+PART_t *lfs_fuse_partition_read(const char *path);
 
 
 

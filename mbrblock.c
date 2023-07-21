@@ -57,12 +57,6 @@ bd_size_t mbr_get_erase_size()
 }
 
 
-typedef struct {
-    uint8_t part;
-    uint32_t offset;
-    uint32_t size;
-    uint32_t type;
-} MBR_PART_ATTR;
 
 
 
@@ -240,11 +234,11 @@ int partition(struct mbr_table *table, int part, uint8_t type, bd_addr_t start, 
 }
 
 enum {
-	PART_TYPE_FAT12 = 0x01, //FAT12
+	PART_TYPE_FAT12      = 0x01, //FAT12
 	PART_TYPE_XENIX_ROOT = 0x02, //XENIX root
-	PART_TYPE_XENIX = 0x03, //XENIX /usr
-	PART_TYPE_FAT16 = 0x04, //FAT16 (16位)
-	PART_TYPE_EXT   = 0x05, //扩展分区
+	PART_TYPE_XENIX      = 0x03, //XENIX /usr
+	PART_TYPE_FAT16      = 0x04, //FAT16 (16位)
+	PART_TYPE_EXT        = 0x05, //扩展分区
 	PART_TYPE_FAT16_32BIT = 0x06, //FAT16 (32位)
 	PART_TYPE_NTFS       = 0x07, //NTFS（Windows NT/2000/XP/Vista/7/8/10）
 	PART_TYPE_FAT32      = 0x0B, //FAT32
@@ -267,7 +261,13 @@ const MBR_PART_ATTR mbr_attr[] = {
     {
         .part = 2, 
         .offset = 0x80200, 
-        .size = 0x7fe00,
+        .size = 0x10000,
+        .type = PART_TYPE_LINUX,
+    },
+    {
+        .part = 3, 
+        .offset = 0x90200, 
+        .size = 0x6fe00,
         .type = PART_TYPE_LINUX,
     },
 };
@@ -407,8 +407,9 @@ int partition_check(void *mbr, uint8_t part, MBR_PART_ATTR *attr)
         attr->type = table->entries[part - 1].type;
         attr->offset = fromle32(table->entries[part - 1].lba_offset) * sector;
         attr->size   = fromle32(table->entries[part - 1].lba_size)   * sector;
-    }
-    
+        
+        printf("attr type %d, offset %d, size %d.\n", attr->type, attr->offset, attr->size);
+    }    
 
     return BD_ERROR_OK;
 }

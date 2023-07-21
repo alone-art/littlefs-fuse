@@ -74,7 +74,7 @@ cat hi.txt
 After using littlefs, you can unmount and detach the loop device:
 ``` bash
 cd ..
-umount mount
+umount mount0
 sudo losetup -d /dev/loop0
 ```
 
@@ -112,8 +112,8 @@ data on the block device!
 
 To mount, run littlefs-fuse with a block device and a mountpoint:
 ``` bash
-mkdir mount
-./lfs /dev/md0 mount
+#mkdir mount
+./lfs /dev/md0 mount            #will auto create folder(mount[id]) in current dir.
 ```
 
 Once mounted, the littlefs filesystem will be accessible through the

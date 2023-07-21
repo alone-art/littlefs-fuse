@@ -23,6 +23,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <unistd.h>
+
+#include "lfs_fuse_partition.h"
 
 
 // config and other state
@@ -31,19 +34,11 @@ static const char *device = NULL;
 static bool format = false;
 static bool migrate = false;
 static lfs_t lfs;
+static PART_t *part;
+static int part_id = 0;
+static const char *dir_prefix = NULL;
+//static bool auto_mkdir = false;
 
-typedef struct {
-	struct lfs_config *config;
-	uint8_t cnt;
-} lfs_configs_t;
-
-typedef struct {
-	lfs_t *lfs;
-	uint8_t cnt;
-} lfss_t;
-
-lfs_configs_t configs;
-lfss_t lfss;
 
 // actual fuse functions
 void lfs_fuse_defaults(struct lfs_config *config) {
@@ -82,11 +77,25 @@ void *lfs_fuse_init(struct fuse_conn_info *conn) {
     return 0;
 }
 
+void lfs_fuse_partition_config(struct lfs_config *config)
+{
+    if(part)
+    {
+    	printf("%s part_id %d.\n", __func__, part_id);
+        uint32_t sector_size = config->block_size;
+        config->block_count = part->attr[part_id].size / sector_size;
+        uint32_t offset = part->attr[part_id].offset;
+        lfs_fuse_bd_config_offset(offset);
+        printf("block count %d, offset %d\n", config->block_count, offset); 
+    }
+}
+
 int lfs_fuse_format(void) {
     int err = lfs_fuse_bd_create(&config, device);
     if (err) {
-        return err;
+        return err; 
     }
+    lfs_fuse_partition_config(&config);
 
     lfs_fuse_defaults(&config);
 
@@ -101,6 +110,7 @@ int lfs_fuse_migrate(void) {
     if (err) {
         return err;
     }
+    lfs_fuse_partition_config(&config);
 
     lfs_fuse_defaults(&config);
 
@@ -115,6 +125,7 @@ int lfs_fuse_mount(void) {
     if (err) {
         return err;
     }
+    lfs_fuse_partition_config(&config);
 
     lfs_fuse_defaults(&config);
 
@@ -405,12 +416,13 @@ enum lfs_fuse_keys {
     KEY_VERSION,
     KEY_FORMAT,
     KEY_MIGRATE,
+    KEY_AUTOMOUNT,
 };
 
 #define OPT(t, p) { t, offsetof(struct lfs_config, p), 0}
 static struct fuse_opt lfs_fuse_opts[] = {
-    FUSE_OPT_KEY("--format",    KEY_FORMAT),
-    FUSE_OPT_KEY("--migrate",   KEY_MIGRATE),
+    FUSE_OPT_KEY("--format",       KEY_FORMAT),
+    FUSE_OPT_KEY("--migrate",      KEY_MIGRATE),
     OPT("-b=%"                  SCNu32, block_size),
     OPT("--block_size=%"        SCNu32, block_size),
     OPT("--block_count=%"       SCNu32, block_count),
@@ -440,6 +452,7 @@ static const char help_text[] =
 "littlefs options:\n"
 "    --format               format instead of mounting\n"
 "    --migrate              migrate previous version  instead of mounting\n"
+"    --automount            auto create a folder to mount the device\n"
 "    -b   --block_size      logical block size, overrides the block device\n"
 "    --block_count          block count, overrides the block device\n"
 "    --block_cycles         number of erase cycles before eviction (512)\n"
@@ -454,14 +467,18 @@ static const char help_text[] =
 
 int lfs_fuse_opt_proc(void *data, const char *arg,
         int key, struct fuse_args *args) {
-
     // option parsing
     switch (key) {
         case FUSE_OPT_KEY_NONOPT:
             if (!device) {
                 device = strdup(arg);
                 return 0;
+            } else if (!dir_prefix) {
+                dir_prefix = strdup(arg);
+                printf("dir_prefix: %s.\n", dir_prefix);
+                return 0;
             }
+            printf("nonopt: %s.\n", arg);
             break;
 
         case KEY_FORMAT:
@@ -471,7 +488,7 @@ int lfs_fuse_opt_proc(void *data, const char *arg,
         case KEY_MIGRATE:
             migrate = true;
             return 0;
-            
+
         case KEY_HELP:
             fprintf(stderr, help_text, args->argv[0]);
             fuse_opt_add_arg(args, "-ho");
@@ -490,81 +507,132 @@ int lfs_fuse_opt_proc(void *data, const char *arg,
 
     return 1;
 }
-
+		
 int main(int argc, char *argv[]) {
     // parse custom options
     struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
+    
     fuse_opt_parse(&args, &config, lfs_fuse_opts, lfs_fuse_opt_proc);
     if (!device) {
         fprintf(stderr, "missing device parameter\n");
         exit(1);
     }
     
-    PART_t *part = lfs_fuse_partition_read(device);
-    if(part && part->partition_cnt == 0)
+    for(int i=0; i<args.argc; i++)
+    {
+    	printf("argc[%d]: %s\n", i, args.argv[i]);
+    }
+    //return 0;
+    
+    part = lfs_fuse_partition_read(device);
+    if(part && part->cnt == 0)
     {
     	fprintf(stderr, "have mbr data, but not found partition.");
         exit(1);
     }
-    else
-    {
-        if(part)
-        {
-    	    configs->cnt = part->partition_cnt;
-    	    lfss->cnt = part->partition_cnt;
-    	    
-    	    configs->config = malloc(sizeof(struct lfs_config) * configs->cnt);
-    	    memset(configs->config, 0, sizeof(struct lfs_config) * configs->cnt);
-    	    lfss->lfs = malloc(sizeof(lfs_t) * lfss->cnt);
-    	    memset(lfss->lfs, 0, sizeof(lfs_t) * lfss->cnt);
-    	}
-        else
-        {
-    	    configs->cnt = 1;
-    	    lfss->cnt = 1;
-    	    
-    	    configs->config = malloc(sizeof(struct lfs_config));
-    	    memset(configs->config, 0, sizeof(struct lfs_config));
-    	    lfss->lfs = malloc(sizeof(lfs_t));
-    	    memset(lfss->lfs, 0, sizeof(lfs_t));
-        }
-    }
-
-    if (format) {
-        // format time, no mount
-        int err = lfs_fuse_format();
-        if (err) {
-            LFS_ERROR("%s", strerror(-err));
-            exit(-err);
-        }
-        exit(0);
-    }
-
-    if (migrate) {
-        // migrate time, no mount
-        int err = lfs_fuse_migrate();
-        if (err) {
-            LFS_ERROR("%s", strerror(-err));
-            exit(-err);
-        }
-        exit(0);
-    }
-
-    // go ahead and mount so errors are reported before backgrounding
-    int err = lfs_fuse_mount();
-    if (err) {
-        LFS_ERROR("%s", strerror(-err));
-        exit(-err);
-    }
+    
+    printf("partition cnt %d\n", part ? part->cnt: 0);
 
     // always single-threaded
     fuse_opt_add_arg(&args, "-s");
+ 
+    int mount_cnt = part ? part->cnt : 1;
+    
+    printf("mount count %d\n", mount_cnt);
+    
+    for(int i=0; i< mount_cnt; i++)
+    {
+        pid_t result;
+        result = fork();
+        
+        if (result == -1) {
+            printf("Failed to fork: %s. Unable to continue - Exiting......", strerror(errno));
+            sleep (5);
+            abort();
+        } else if (result == 0) {
+            // I'm the child - do some cleanup
+        }
+        switch(result)
+        {
+            case 0: // child
+            {
+                setsid();
+                
+                printf("part_id %d\n", i);
+                part_id = i;
+                if(!dir_prefix)
+                {
+                    printf("please input folder name prefix, like \"./lfs /dev/loop0 mount\"\n");
+                    exit(0);
+                }
+                else
+                {
+                    char dir_name[100] = {0};
+                    sprintf(dir_name, "%s%d", dir_prefix, i);
+                    fuse_opt_add_arg(&args, dir_name);
+                    
+                    mode_t folderPermissions = 0777;
+                    if(access(dir_name, F_OK) != 0)
+                    {
+                        if (mkdir(dir_name, folderPermissions) == 0)
+                        {
+                            printf("Folder created successfully.\n");
+                        }
+                        else 
+                        {
+                            printf("Failed to create folder");
+                            exit(0);
+                        }
+                    }
+                    
+		    for(int i=0; i<args.argc; i++)
+		    {
+		    	printf("argc[%d]: %s\n", i, args.argv[i]);
+		    }
+                }
+                
+                if (format) {
+                    // format time, no mount
+                    int err = lfs_fuse_format();
+                    if (err) {
+                        LFS_ERROR("%s", strerror(-err));
+                        exit(-err);
+                    }
+                    break;
+                }
 
-    // enter fuse
-    err = fuse_main(args.argc, args.argv, &lfs_fuse_ops, NULL);
-    if (err) {
-        lfs_fuse_destroy(NULL);
+                if (migrate) {
+                    // migrate time, no mount
+                    int err = lfs_fuse_migrate();
+                    if (err) {
+                        LFS_ERROR("%s", strerror(-err));
+                        exit(-err);
+                    }
+                    break;
+                }
+
+                // go ahead and mount so errors are reported before backgrounding
+                int err = lfs_fuse_mount();
+                if (err) {
+                    LFS_ERROR("%s", strerror(-err));
+                    exit(-err);
+                }
+			
+                err = fuse_main(args.argc, args.argv, &lfs_fuse_ops, NULL);
+                if (err) {
+                    lfs_fuse_destroy(NULL);
+                }
+                exit(0);
+                break;
+            }
+
+            default: // parent
+                //exit(0);
+                break;
+        }
     }
-
-    return err;
+    
+    return 0;
 }
+
+
