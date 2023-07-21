@@ -1,3 +1,6 @@
+## support mbr partition
+only test on linux.
+
 ## The little filesystem in user-space
 
 A FUSE wrapper that puts the littlefs in user-space.
@@ -55,9 +58,8 @@ data on the block device!
 ./lfs --format /dev/loop0
 ```
 
-To mount, run littlefs-fuse with a block device and a mountpoint:
+To mount, run littlefs-fuse with a block device and a mountpoint, will auto create folder of name mountn, like mount0 mount1...:
 ``` bash
-mkdir mount
 ./lfs /dev/loop0 mount
 ```
 
@@ -112,8 +114,8 @@ data on the block device!
 
 To mount, run littlefs-fuse with a block device and a mountpoint:
 ``` bash
-#mkdir mount
-./lfs /dev/md0 mount            #will auto create folder(mount[id]) in current dir.
+mkdir mount
+./lfs /dev/md0 mount
 ```
 
 Once mounted, the littlefs filesystem will be accessible through the
