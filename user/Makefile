@@ -1,6 +1,8 @@
 
 PROC=main
 
+LDFLAGS += -lpthread
+
 SRC = $(wildcard *.c)
 OBJS = $(patsubst %.c, %.o, $(SRC))
 
